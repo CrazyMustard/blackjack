@@ -1,0 +1,380 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef enum { Diamonds, Hearts, Clubs, Spades } Suit;
+typedef enum { False,True } BOOL;
+typedef enum {NOP_STAT=-1,EMPTY_STAT,ACT_STAT,WARN_STAT} stat;
+
+#define MAX_DECK_SIZE 52
+
+typedef struct {
+    short id;
+    Suit suit;
+} Card;
+
+typedef struct Card_node {
+	Card card;
+	struct Card_node* next;
+}card_node;
+
+typedef struct Cardstack_node{
+	Card card;
+	struct Cardstack_node* prev;
+}cardstack_node;
+
+typedef struct master_head{
+	int size;
+	Card card;
+	struct Cardstack_node* prev;
+}cardstack_mhead;
+
+typedef struct {
+    int won;
+    int lost;
+    int tied;
+} Results;
+
+typedef struct {
+    char nome[8];
+    float money;
+    float bet;
+    cardstack_mhead *cards;
+    Results games_result;
+    BOOL ai; // computador ou humano
+    short score;
+} Player;
+
+typedef struct Node_player {
+    Player player;
+    struct Node_player *next;
+} node_player;
+
+//////////
+
+BOOL empty(card_node* head);
+card_node* create_node(Card data);
+
+stat add(card_node** head, Card data){
+	if(empty(*head))
+		return NOP_STAT;
+
+	card_node* new_node=create_node(data);
+	if(empty(new_node))
+		return NOP_STAT;
+
+	new_node->next=*head;
+	new_node->card=data;
+	*head=new_node;
+	return ACT_STAT;
+}
+
+
+stat insert_anywhere(card_node** head,Card data,int position){
+	card_node* curr=*head;
+	if( !empty(curr)){
+		if(position<0)
+			return NOP_STAT;
+
+		card_node* new_node=create_node(data);
+
+		if(position==0){
+			new_node->card=data;
+			new_node->next=*head;
+			*head=new_node;
+		}
+		for(int i=1;i<position && curr!=NULL;i++){
+			curr=curr->next;
+		}
+		if(empty(curr)){
+			free(new_node);
+			return NOP_STAT;
+		}
+
+		new_node->next=curr->next;
+		new_node->card=data;
+		curr->next=new_node;
+		return ACT_STAT;
+	}
+	return EMPTY_STAT;
+}
+
+card_node* take_node(card_node** head,int position){
+	card_node* tmp;
+	card_node* curr=*head;
+
+	if( !empty(curr)){
+		if(position<0)
+			return NULL;
+		else if(position==0){
+			*head=curr->next;
+			curr->next=NULL;
+			return curr;
+		}
+		for(int i=1;i<position &&  curr!=NULL;i++)
+			curr=curr->next;
+		if(empty(curr)){
+			return NULL;
+		}
+		tmp=curr->next;
+		curr->next=curr->next->next;
+		tmp->next=NULL;
+		return tmp;
+	}
+	return NULL;
+}
+
+stat join_node(card_node** head,card_node* jointo,int position){
+	card_node* curr=*head;
+	if( !empty(curr)){
+		if(position<0)
+			return NOP_STAT;
+		else if(position==0){
+			jointo->next=*head;
+			*head=jointo;
+		}
+		for(int i=1;i<position && curr!=NULL;i++)
+			curr=curr->next;
+		if(empty(curr)){
+			return NOP_STAT;
+		}
+		jointo->next=curr->next;
+		curr->next=jointo;
+	}
+	else{
+		*head=jointo;
+		return ACT_STAT;
+	}
+	return WARN_STAT;
+}
+
+
+BOOL empty(card_node* head){
+	return head==NULL;
+}
+
+card_node* create_node(Card data){
+	card_node* new_node=malloc(sizeof(card_node));
+		if(empty(new_node))
+			exit(EXIT_FAILURE);
+	return new_node;
+}
+
+void eraselist(card_node* head){
+	card_node* tmp;
+	while((tmp=head)!=NULL){
+		head=head->next;
+		free(tmp);
+	}
+}
+
+
+///////////
+
+
+
+void push(cardstack_mhead* top,Card data){
+	if(top->size>0){
+		cardstack_node* old_node= malloc(sizeof(cardstack_node));
+		old_node->card=top->card;
+		old_node->prev=top->prev;
+		top->prev=old_node->prev;
+	}
+	top->card=data;
+	top->size++;
+}
+
+Card pop(cardstack_mhead* top){
+	cardstack_node* tmp;
+
+	Card data=top->card;
+	top->card=top->prev->card;
+	tmp=top->prev;
+	top->prev=top->prev->prev;
+	top->size--;
+	free(tmp);
+	return data;
+}
+
+Card top(cardstack_mhead* top){
+	return top->card;
+}
+
+int stacksize(cardstack_mhead* top){
+	return top->size;
+}
+
+void erase_stack(cardstack_mhead* top){
+    cardstack_node* curr;
+    cardstack_node* tmp;
+    cardstack_mhead* head=top;
+
+    tmp=top->prev;
+    curr=tmp;
+    free(head);
+	while((tmp=curr)!=NULL){
+		curr=curr->prev;
+		free(tmp);
+	}
+}
+
+
+Card* saverase_stack(cardstack_mhead* top){
+	cardstack_node* curr, *tmp;
+    int st_size=stacksize(top);
+
+
+	Card* data=malloc((top->size)*sizeof(Card));
+	curr=top->prev;
+	data[st_size-1]=top->card;
+	st_size-=2;
+    free(top);
+
+	for(;0<=st_size;st_size--){
+		tmp=curr;
+		data[st_size]=curr->card;
+		curr=curr->prev;
+		free(tmp);
+	}
+	return data;
+}
+
+///////////
+
+card_node* CreateDeck(int decks){
+	card_node* head=malloc(decks*52*sizeof(card_node));
+	card_node* tmp=head;
+	if(empty(head))
+		return head;
+	for (int i=0; i<decks*52;i++){
+		tmp->next=tmp+1;
+		tmp->card.id=i%13;
+		tmp->card.suit= i/13%4;
+		tmp=tmp->next;
+	}
+	(tmp-1)->next=NULL;
+	return head;
+}
+
+
+void ShuffleCards(card_node** deckhead, int decks,int times){
+	card_node* card_tkn;
+    int rdm;
+	int deck_size=decks*MAX_DECK_SIZE;
+
+	while(times>0){
+		for( int rdm,i=0 ; i<deck_size; i++){
+			rdm = rand()%deck_size;
+			card_tkn=take_node(deckhead,rdm);
+			join_node(deckhead,card_tkn,i);
+		}
+		times--;
+	}
+}
+
+
+//Option 0:House | Option1: Player 1 | Option 2: Player 2 | Option3: Player 3 | Option4: Player 4 | Option 5 : All |
+void DealCards(card_node** deckhead,node_player* head,Player* house, int decks,int num_cardstodeal, int option){
+	card_node* card_taken;
+    if(house!=NULL && head!=NULL && option>=0 && option<6){
+		for(int i=0;i<num_cardstodeal;i++){
+			for(int i=1;i<=option && head!=NULL;i++){
+				if((i==option || option==5 )&& i!=5){
+					card_taken=take_node(deckhead,0);
+					push(head->player.cards,card_taken->card);
+					free(card_taken);
+					if(*deckhead==NULL){
+						*deckhead=CreateDeck(decks);
+						ShuffleCards(deckhead,decks,1);
+					}
+				}
+				head=head->next;
+			}
+			if(option%5==0){
+				card_taken=take_node(deckhead,0);
+				push(house->cards,card_taken->card);
+				free(card_taken);
+				if(*deckhead==NULL){
+						*deckhead=CreateDeck(decks);
+						ShuffleCards(deckhead,decks,1);
+				}
+			}
+		}
+	}
+}
+
+
+void GetScore(node_player* current_player){
+	const short card_points[]={2,3,4,5,6,7,8,9,10,10,10,10};
+    short score=0,aces=0;
+    cardstack_node* cardnode_ptr;
+
+
+	cardnode_ptr->card=current_player->player.cards->card;
+    cardnode_ptr->prev=current_player->player.cards->prev;
+	// calculate the score excluding the aces
+    	while(cardnode_ptr!=NULL) {
+       		if(cardnode_ptr->card.id!=12)
+                score+=card_points[cardnode_ptr->card.id];
+        	else
+                aces++;
+		cardnode_ptr=cardnode_ptr->prev;
+	}
+
+	// calculates the aces' points and sums it to the rest of the score
+    	for(;aces>0;aces--){
+        	if(score+11<=22 - aces)
+                score+=11;
+        	else
+                score+=1;
+    	}
+    	current_player->player.score=score;
+}
+
+
+void GetBankroll_GameResults(Player* house, node_player* head, int bet)
+{
+	while(head!=NULL){
+		if(head->player.score>21)
+			head->player.games_result.tied+=(house->score>21),head->player.games_result.lost+=(house->score<=21);
+		else if(house->score>21){
+			head->player.money+=2*bet + 0.5*bet*(head->player.score==21 && head->player.cards->size==2);
+			head->player.games_result.won+=1;
+		}
+		else if(house->score==head->player.score){
+			if(house->score==21){
+				if( head->player.cards->size==house->cards->size ||  head->player.cards->size!=2 && house->cards->size!=2)
+					head->player.money+=bet, head->player.games_result.tied+=1;
+				else if(head->player.cards->size==2 && house->cards->size!=2)
+					head->player.money+=2.5*bet,head->player.games_result.won+=1;
+				else //(head->player.cards->size!=2 && house->cards->size==2)
+					head->player.games_result.lost+=1;
+			}
+			else
+				head->player.money+=bet, head->player.games_result.tied+=1;
+		}
+		else if(head->player.score!=21 || head->player.score==21 && head->player.cards->size!=2){
+            head->player.money+= 2*bet*(head->player.score > house->score);
+			(head->player.score > house->score)?head->player.games_result.won+=1:head->player.games_result.lost+=1;
+		}
+		else
+			head->player.money+=2.5*bet,head->player.games_result.won+=1;
+
+		head=head->next;
+	}
+}
+
+node_player* Hit(card_node** deckhead,Player* house,int decks,node_player* current_player, int option){
+	DealCards(deckhead,current_player,house, decks,1, option);
+	GetScore(current_player);
+	if(current_player->player.score>21){
+		//Bust
+		return current_player->next;
+	}
+	return current_player;
+}
+node_player* Stand(Player* house,int decks,node_player* current_player, int option){
+	if(option%5!=0)
+		return current_player->next;
+	else
+		return NULL;
+}
